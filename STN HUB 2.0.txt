@@ -1,0 +1,830 @@
+
+for i, v in pairs(game:GetDescendants()) do
+    if v.Name == "STN_MobileGui" or v.Name == "STNHub_Gui" then
+        v:Destroy()
+    end
+end
+
+-- Services
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local LocalPlayer = Players.LocalPlayer
+
+-- ============================================================
+--  ЗАГРУЗКА FLUENT UI
+-- ============================================================
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Survive the night Hub",
+    SubTitle = "2.0 | by Synex",
+    TabWidth = 140,
+    Size = UDim2.fromOffset(420, 290),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+-- Плавающая кнопка (появляется только когда меню скрыто)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "STNHub_Gui"
+ScreenGui.Parent = CoreGui
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Parent = ScreenGui
+ToggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+ToggleButton.Position = UDim2.new(0.02, 0, 0.4, 0)
+ToggleButton.Size = UDim2.new(0, 80, 0, 30)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Text = "Open Gui"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 12
+ToggleButton.Draggable = true
+ToggleButton.Active = true
+ToggleButton.Visible = true
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 6)
+UICorner.Parent = ToggleButton
+
+-- Отслеживаем видимость окна Fluent
+local function updateToggleButtonVisibility()
+    pcall(function()
+        local windowVisible = Window.Root and Window.Root.Visible
+        ToggleButton.Visible = not windowVisible
+    end)
+end
+
+pcall(function()
+    if Window.Root then
+        Window.Root:GetPropertyChangedSignal("Visible"):Connect(updateToggleButtonVisibility)
+    end
+end)
+
+ToggleButton.MouseButton1Click:Connect(function()
+    pcall(function()
+        if Window.Root then
+            Window.Root.Visible = true
+        end
+        updateToggleButtonVisibility()
+    end)
+end)
+
+-- Вкладки
+local Tabs = {
+    Visual = Window:AddTab({ Title = "Visual", Icon = "eye" }),
+    Movement = Window:AddTab({ Title = "Movement", Icon = "list" }),
+    Misc = Window:AddTab({ Title = "Misc", Icon = "settings" })
+}
+
+-- ============================================================
+--  ESP
+-- ============================================================
+local activeTags = {}
+
+local function addObjectTag(obj, text, color)
+    if not obj or not obj.Parent then return end
+    for i, tag in ipairs(activeTags) do
+        if tag.Adornee == obj then
+            tag:Destroy()
+            table.remove(activeTags, i)
+            break
+        end
+    end
+    local bill = Instance.new("BillboardGui")
+    bill.Name = "STN_ObjectTag"
+    bill.AlwaysOnTop = true
+    bill.Size = UDim2.new(0, 120, 0, 30)
+    bill.StudsOffset = Vector3.new(0, 2, 0)
+    bill.Parent = obj
+    local label = Instance.new("TextLabel", bill)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color
+    label.TextSize = 14
+    label.Font = Enum.Font.GothamBold
+    label.TextStrokeTransparency = 0.3
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    table.insert(activeTags, bill)
+end
+
+local function removeTagsByCondition(condition)
+    for i = #activeTags, 1, -1 do
+        local tag = activeTags[i]
+        if condition(tag) then
+            tag:Destroy()
+            table.remove(activeTags, i)
+        end
+    end
+end
+
+local function removeAllTags()
+    for _, tag in pairs(activeTags) do
+        tag:Destroy()
+    end
+    activeTags = {}
+end
+
+-- Состояния ESP
+local espStates = {
+    relic = false,
+    murch = false,
+    blacklight = false,
+    aila = false,
+    battery = false
+}
+
+local function updateRelicTag()
+    if espStates.relic then
+        for _, v in pairs(Workspace.TempMap.Main.Relics:GetChildren()) do
+            if v.Name == "Relic" then
+                addObjectTag(v, "RELIC", Color3.fromRGB(50, 100, 200))
+            end
+        end
+    else
+        removeTagsByCondition(function(tag)
+            return tag.Adornee and tag.Adornee.Parent and tag.Adornee.Parent.Parent == Workspace.TempMap.Main.Relics
+        end)
+    end
+end
+
+local function updateMurchTag()
+    if espStates.murch then
+        for _, v in pairs(Workspace.Misc:GetDescendants()) do
+            if v.Name == "MurchCase" then
+                addObjectTag(v, "MURCH CASE", Color3.fromRGB(255, 60, 60))
+            end
+        end
+    else
+        removeTagsByCondition(function(tag)
+            return tag.Adornee and tag.Adornee.Name == "MurchCase"
+        end)
+    end
+end
+
+local function updateBlacklightTag()
+    if espStates.blacklight then
+        for _, v in pairs(Workspace:GetDescendants()) do
+            local name = v.Name
+            if name == "EventCase" or name == "EVENTCase" or name == "EVENTCASE" or
+               name == "BlacklightCase" or name == "BLACKLIGHTCase" or name == "BLACKLIGHTCASE" or
+               name == "BlackLightCase" or name == "BlackilightCase" or name == "Blacklightcase" or
+               name == "blacklightCase" or name == "blacklight case" or name == "blacklightcase" then
+                addObjectTag(v, "BLACKLIGHT CASE", Color3.fromRGB(180, 60, 255))
+            end
+        end
+    else
+        removeTagsByCondition(function(tag)
+            return tag.Adornee and (
+                tag.Adornee.Name == "EventCase" or tag.Adornee.Name == "EVENTCase" or tag.Adornee.Name == "EVENTCASE" or
+                tag.Adornee.Name == "BlacklightCase" or tag.Adornee.Name == "BLACKLIGHTCase" or
+                tag.Adornee.Name == "BLACKLIGHTCASE" or tag.Adornee.Name == "BlackLightCase" or
+                tag.Adornee.Name == "BlackilightCase" or tag.Adornee.Name == "Blacklightcase" or
+                tag.Adornee.Name == "blacklightCase" or tag.Adornee.Name == "blacklight case" or
+                tag.Adornee.Name == "blacklightcase"
+            )
+        end)
+    end
+end
+
+local function updateAilaTag()
+    if espStates.aila then
+        for _, v in pairs(Workspace.Misc:GetDescendants()) do
+            if v.Name == "AILACase" then
+                addObjectTag(v, "AILA CASE", Color3.fromRGB(0, 180, 255))
+            end
+        end
+    else
+        removeTagsByCondition(function(tag)
+            return tag.Adornee and tag.Adornee.Name == "AILACase"
+        end)
+    end
+end
+
+local function updateBatteryTag()
+    if espStates.battery then
+        for _, v in pairs(Workspace:GetDescendants()) do
+            if v.Name == "BlacklightBattery" or v.Name == "Battery" then
+                addObjectTag(v, "BLACKLIGHT BATTERY", Color3.fromRGB(255, 200, 50))
+            end
+        end
+    else
+        removeTagsByCondition(function(tag)
+            return tag.Adornee and (tag.Adornee.Name == "BlacklightBattery" or tag.Adornee.Name == "Battery")
+        end)
+    end
+end
+
+workspace.DescendantAdded:Connect(function(obj)
+    if espStates.relic and obj.Name == "Relic" and obj.Parent == Workspace.TempMap.Main.Relics then
+        addObjectTag(obj, "RELIC", Color3.fromRGB(50, 100, 200))
+    end
+    if espStates.murch and obj.Name == "MurchCase" then
+        addObjectTag(obj, "MURCH CASE", Color3.fromRGB(255, 60, 60))
+    end
+    if espStates.blacklight and (
+        obj.Name == "EventCase" or obj.Name == "EVENTCase" or obj.Name == "EVENTCASE" or
+        obj.Name == "BlacklightCase" or obj.Name == "BLACKLIGHTCase" or obj.Name == "BLACKLIGHTCASE"
+    ) then
+        addObjectTag(obj, "BLACKLIGHT CASE", Color3.fromRGB(180, 60, 255))
+    end
+    if espStates.aila and obj.Name == "AILACase" then
+        addObjectTag(obj, "AILA CASE", Color3.fromRGB(0, 180, 255))
+    end
+    if espStates.battery and (obj.Name == "BlacklightBattery" or obj.Name == "Battery") then
+        addObjectTag(obj, "BLACKLIGHT BATTERY", Color3.fromRGB(255, 200, 50))
+    end
+end)
+
+-- ============================================================
+--  PLAYER ESP
+-- ============================================================
+local playerEspActive = false
+local playerHighlights = {}
+local playerNameTags = {}
+local playerConnections = {}
+
+local function addPlayerESP(plr)
+    if not playerEspActive or plr == LocalPlayer or not plr.Character then return end
+    local char = plr.Character
+    local hl = Instance.new("Highlight")
+    hl.Adornee = char
+    hl.FillTransparency = 1
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.OutlineTransparency = 0
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = char
+    table.insert(playerHighlights, hl)
+    local bill = Instance.new("BillboardGui")
+    bill.Name = "STN_PlayerTag"
+    bill.AlwaysOnTop = true
+    bill.Size = UDim2.new(0, 120, 0, 30)
+    bill.StudsOffset = Vector3.new(0, 4, 0)
+    bill.Parent = char
+    local text = Instance.new("TextLabel", bill)
+    text.Size = UDim2.new(1, 0, 1, 0)
+    text.BackgroundTransparency = 1
+    text.Text = plr.Name
+    text.TextColor3 = Color3.fromRGB(255, 255, 255)
+    text.TextSize = 14
+    text.Font = Enum.Font.GothamBold
+    text.TextStrokeTransparency = 0.3
+    table.insert(playerNameTags, bill)
+end
+
+local function removePlayerESP()
+    for _, h in pairs(playerHighlights) do
+        pcall(function() h:Destroy() end)
+    end
+    playerHighlights = {}
+    for _, t in pairs(playerNameTags) do
+        pcall(function() t:Destroy() end)
+    end
+    playerNameTags = {}
+end
+
+local function refreshPlayerESP()
+    removePlayerESP()
+    if not playerEspActive then return end
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            if plr.Character then
+                addPlayerESP(plr)
+            end
+        end
+    end
+end
+
+-- Подписка на новых игроков
+Players.PlayerAdded:Connect(function(plr)
+    if playerEspActive then
+        plr.CharacterAdded:Connect(function()
+            if playerEspActive then
+                addPlayerESP(plr)
+            end
+        end)
+        if plr.Character then
+            addPlayerESP(plr)
+        end
+    end
+end)
+
+-- ============================================================
+--  AURA
+-- ============================================================
+local relicAuraActive = false
+local relicAuraThread = nil
+local itemAuraActive = false
+local itemAuraThread = nil
+
+local function startRelicAura()
+    if relicAuraThread then coroutine.close(relicAuraThread) end
+    relicAuraThread = coroutine.create(function()
+        while relicAuraActive do
+            task.wait(0.1)
+            pcall(function()
+                for _, v in pairs(Workspace.TempMap.Main.Relics:GetChildren()) do
+                    if v.Name == "Relic" and v:FindFirstChild("RelicPrompt") then
+                        local prompt = v.RelicPrompt
+                        local orig = prompt.MaxActivationDistance
+                        prompt.MaxActivationDistance = 2000
+                        fireproximityprompt(prompt)
+                        prompt.MaxActivationDistance = orig
+                    end
+                end
+                for _, v in pairs(Workspace.TempMap.Main.BonusItems:GetDescendants()) do
+                    if v.Name == "BlacklightBattery" then
+                        local prompt = v:FindFirstChild("BlacklightBatteryPrompt")
+                        if prompt then
+                            local orig = prompt.MaxActivationDistance
+                            prompt.MaxActivationDistance = 2000
+                            fireproximityprompt(prompt)
+                            prompt.MaxActivationDistance = orig
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+    coroutine.resume(relicAuraThread)
+end
+
+local function startItemAura()
+    if itemAuraThread then coroutine.close(itemAuraThread) end
+    itemAuraThread = coroutine.create(function()
+        while itemAuraActive do
+            task.wait(0.1)
+            pcall(function()
+                for _, v in pairs(Workspace.TempMap.Main.BonusItems:GetDescendants()) do
+                    if v.ClassName == "ProximityPrompt" then
+                        fireproximityprompt(v)
+                    end
+                end
+                for _, v in pairs(Workspace.Misc:GetDescendants()) do
+                    if v.Name == "MurchCase" or v.Name == "AILACase" or v.Name == "EventCase" or v.Name == "BLACKLIGHTCase" then
+                        local prompt = v:FindFirstChildWhichIsA("ProximityPrompt")
+                        if prompt then
+                            local orig = prompt.MaxActivationDistance
+                            prompt.MaxActivationDistance = 2000
+                            fireproximityprompt(prompt)
+                            prompt.MaxActivationDistance = orig
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+    coroutine.resume(itemAuraThread)
+end
+
+-- ============================================================
+--  INSTANT INTERACT
+-- ============================================================
+local instantInteractActive = false
+local instantInteractConnection = nil
+local instantInteractTrackConnection = nil
+local originalHoldDurations = {}
+
+local function saveOriginalHoldDuration(prompt)
+    if not originalHoldDurations[prompt] then
+        originalHoldDurations[prompt] = prompt.HoldDuration
+    end
+end
+
+local function restoreAllPrompts()
+    for prompt, orig in pairs(originalHoldDurations) do
+        if prompt and prompt.Parent then
+            prompt.HoldDuration = orig
+        end
+    end
+end
+
+local function onDescendantAdded(descendant)
+    if instantInteractActive and descendant:IsA("ProximityPrompt") then
+        saveOriginalHoldDuration(descendant)
+        descendant.HoldDuration = 0
+    end
+end
+
+local function enableInstantInteract()
+    if instantInteractActive then return end
+    instantInteractActive = true
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            saveOriginalHoldDuration(v)
+            v.HoldDuration = 0
+        end
+    end
+    instantInteractConnection = RunService.Heartbeat:Connect(function()
+        if not instantInteractActive then return end
+        for prompt, _ in pairs(originalHoldDurations) do
+            if prompt and prompt.Parent and prompt.HoldDuration ~= 0 then
+                prompt.HoldDuration = 0
+            end
+        end
+    end)
+    instantInteractTrackConnection = game.DescendantAdded:Connect(onDescendantAdded)
+end
+
+local function disableInstantInteract()
+    if not instantInteractActive then return end
+    instantInteractActive = false
+    if instantInteractConnection then instantInteractConnection:Disconnect() end
+    if instantInteractTrackConnection then instantInteractTrackConnection:Disconnect() end
+    restoreAllPrompts()
+    originalHoldDurations = {}
+end
+
+-- ============================================================
+--  FLY
+-- ============================================================
+local flyActive = false
+local flyBodyGyro = nil
+local flyBodyVelocity = nil
+local flySpeed = 50
+local flyCurrentSpeed = 0
+local flyMaxSpeed = 50
+local flyConnection = nil
+
+local function startFly()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+    local hum = char:FindFirstChild("Humanoid")
+    if not torso or not hum then return end
+    if flyBodyGyro then flyBodyGyro:Destroy() end
+    if flyBodyVelocity then flyBodyVelocity:Destroy() end
+    if flyConnection then flyConnection:Disconnect() end
+    flyBodyGyro = Instance.new("BodyGyro", torso)
+    flyBodyGyro.P = 9e4
+    flyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyGyro.CFrame = torso.CFrame
+    flyBodyVelocity = Instance.new("BodyVelocity", torso)
+    flyBodyVelocity.Velocity = Vector3.new(0, 0.1, 0)
+    flyBodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    hum.PlatformStand = true
+    local animate = char:FindFirstChild("Animate")
+    if animate then animate.Disabled = true end
+    flyCurrentSpeed = 0
+    flyMaxSpeed = flySpeed
+    flyConnection = RunService.RenderStepped:Connect(function()
+        if not flyActive then return end
+        local currentChar = LocalPlayer.Character
+        if not currentChar then return end
+        local currentTorso = currentChar:FindFirstChild("UpperTorso") or currentChar:FindFirstChild("Torso")
+        local currentHum = currentChar:FindFirstChild("Humanoid")
+        if not currentTorso or not currentHum then return end
+        local moveDir = currentHum.MoveDirection
+        local cam = Workspace.CurrentCamera
+        local forward = cam.CFrame.LookVector
+        local right = cam.CFrame.RightVector
+        local moveVector = Vector3.new(moveDir.X, 0, moveDir.Z)
+        local moveDirectionWorld = (forward * -moveVector.Z) + (right * moveVector.X)
+        if moveVector.Magnitude > 0 then
+            moveDirectionWorld = moveDirectionWorld.Unit
+        else
+            moveDirectionWorld = Vector3.new(0, 0, 0)
+        end
+        if moveVector.Magnitude > 0 then
+            flyCurrentSpeed = math.min(flyCurrentSpeed + 0.5 + (flyCurrentSpeed / flyMaxSpeed), flyMaxSpeed)
+        else
+            flyCurrentSpeed = math.max(flyCurrentSpeed - 1, 0)
+        end
+        flyBodyVelocity.Velocity = moveDirectionWorld * flyCurrentSpeed
+        if moveVector.Magnitude > 0 then
+            flyBodyGyro.CFrame = CFrame.new(currentTorso.Position, currentTorso.Position + moveDirectionWorld)
+        else
+            flyBodyGyro.CFrame = cam.CFrame
+        end
+    end)
+end
+
+local function stopFly()
+    flyActive = false
+    if flyBodyGyro then flyBodyGyro:Destroy() end
+    if flyBodyVelocity then flyBodyVelocity:Destroy() end
+    if flyConnection then flyConnection:Disconnect() end
+    flyBodyGyro = nil
+    flyBodyVelocity = nil
+    flyConnection = nil
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then hum.PlatformStand = false end
+        local animate = char:FindFirstChild("Animate")
+        if animate then animate.Disabled = false end
+    end
+    flyCurrentSpeed = 0
+end
+
+-- ============================================================
+--  FULL BRIGHT
+-- ============================================================
+local fullBrightState = false
+local savedLighting = {}
+
+local function setFullBright(enabled)
+    if enabled then
+        savedLighting = {
+            Ambient = Lighting.Ambient,
+            OutdoorAmbient = Lighting.OutdoorAmbient,
+            Brightness = Lighting.Brightness,
+            FogEnd = Lighting.FogEnd,
+            GlobalShadows = Lighting.GlobalShadows,
+            ClockTime = Lighting.ClockTime,
+        }
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        Lighting.Brightness = 2
+        Lighting.FogEnd = 1000000
+        Lighting.GlobalShadows = false
+        Lighting.ClockTime = 12
+        for _, v in pairs(Lighting:GetChildren()) do
+            if v:IsA("BloomEffect") or v:IsA("Atmosphere") or v:IsA("Clouds") or v:IsA("Fog") then
+                v.Enabled = false
+            end
+        end
+    else
+        if savedLighting then
+            Lighting.Ambient = savedLighting.Ambient
+            Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
+            Lighting.Brightness = savedLighting.Brightness
+            Lighting.FogEnd = savedLighting.FogEnd
+            Lighting.GlobalShadows = savedLighting.GlobalShadows
+            Lighting.ClockTime = savedLighting.ClockTime
+        end
+        for _, v in pairs(Lighting:GetChildren()) do
+            if v:IsA("BloomEffect") or v:IsA("Atmosphere") or v:IsA("Clouds") then
+                v.Enabled = true
+            end
+        end
+    end
+end
+
+-- ============================================================
+--  CASE FARM
+-- ============================================================
+local function startCaseFarm()
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    local miscFolder = Workspace:FindFirstChild("Misc")
+    if not miscFolder then
+        StarterGui:SetCore("SendNotification", { Title = "Farm Status", Text = "Folder 'Misc' not found!", Duration = 3 })
+        return
+    end
+    local targetNames = {
+        "AILACase", "MurchCase", "EventCase", "EVENTCase", "EVENTCASE",
+        "BLACKLIGHTCase", "BlacklightCase", "Blacklightcase",
+        "blacklightcase", "blacklightCase", "blacklight case", "BlackLightCase", "BlackLightcase"
+    }
+    local foundCases = {}
+    for _, obj in ipairs(miscFolder:GetChildren()) do
+        for _, name in ipairs(targetNames) do
+            if obj.Name == name then
+                table.insert(foundCases, obj)
+                break
+            end
+        end
+    end
+    if #foundCases == 0 then
+        StarterGui:SetCore("SendNotification", { Title = "Farm Status", Text = "0 cases found", Duration = 5 })
+        return
+    end
+    for _, case in ipairs(foundCases) do
+        if case:IsA("BasePart") or case:FindFirstChildWhichIsA("BasePart") then
+            local targetPos = case:IsA("BasePart") and case.CFrame or case:FindFirstChildWhichIsA("BasePart").CFrame
+            rootPart.CFrame = targetPos * CFrame.new(0, 3, 0)
+            task.wait(2.2)
+        end
+    end
+    StarterGui:SetCore("SendNotification", { Title = "Farm Status", Text = "Finished farming all found cases!", Duration = 3 })
+end
+
+-- ============================================================
+--  ANTI-CHEAT BYPASS
+-- ============================================================
+local bypassEnabled = false
+local realWalkSpeed = 16
+local fakeWalkSpeed = 16
+
+local function enableBypass()
+    if bypassEnabled then return end
+    bypassEnabled = true
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if not checkcaller() and method == "Kick" then
+            return nil
+        end
+        return oldNamecall(self, ...)
+    end)
+    local mt = getrawmetatable(game)
+    local oldNewIndex = mt.__newindex
+    setreadonly(mt, false)
+    mt.__newindex = newcclosure(function(t, k, v)
+        if not checkcaller() and t:IsA("Humanoid") then
+            if k == "WalkSpeed" then
+                realWalkSpeed = v
+                return oldNewIndex(t, k, fakeWalkSpeed)
+            elseif k == "JumpPower" then
+                return nil
+            end
+        end
+        return oldNewIndex(t, k, v)
+    end)
+    local oldIndex = mt.__index
+    mt.__index = newcclosure(function(t, k)
+        if not checkcaller() and t:IsA("Humanoid") and k == "WalkSpeed" then
+            return fakeWalkSpeed
+        end
+        return oldIndex(t, k)
+    end)
+    setreadonly(mt, true)
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("LocalScript") then
+            local name = v.Name:lower()
+            if name:find("anticheat") or name:find("adoni") or name:find("checker") or name:find("speed") then
+                v.Disabled = true
+            end
+        end
+    end
+end
+
+local function disableBypass()
+    bypassEnabled = false
+end
+
+-- ============================================================
+--  ПЕРЕМЕННЫЕ ДЛЯ SPEEDHACK / JUMP POWER / NOCLIP
+-- ============================================================
+local walkSpeedActive = false
+local walkSpeedValue = 16
+local walkSpeedConnection = nil
+
+local jumpPowerActive = false
+local jumpPowerValue = 50
+
+local noclipActive = false
+local noclipConnection = nil
+
+-- ============================================================
+--  ПОДКЛЮЧЕНИЕ ВСЕХ ФУНКЦИЙ К FLUENT UI
+-- ============================================================
+
+-- VISUAL TAB
+Tabs.Visual:AddToggle("BlackLightESP", { Title = "BlackLight ESP", Default = false, Callback = function(state)
+    espStates.blacklight = state
+    updateBlacklightTag()
+end })
+Tabs.Visual:AddToggle("RelicESP", { Title = "Relic ESP", Default = false, Callback = function(state)
+    espStates.relic = state
+    updateRelicTag()
+end })
+Tabs.Visual:AddToggle("PlayerESP", { Title = "Player ESP", Default = false, Callback = function(state)
+    playerEspActive = state
+    refreshPlayerESP()
+end })
+Tabs.Visual:AddToggle("AilaCaseESP", { Title = "Aila case ESP", Default = false, Callback = function(state)
+    espStates.aila = state
+    updateAilaTag()
+end })
+Tabs.Visual:AddToggle("MurchCaseESP", { Title = "Murch case ESP", Default = false, Callback = function(state)
+    espStates.murch = state
+    updateMurchTag()
+end })
+Tabs.Visual:AddToggle("BatteryESP", { Title = "Battery ESP", Default = false, Callback = function(state)
+    espStates.battery = state
+    updateBatteryTag()
+end })
+
+-- MOVEMENT TAB
+Tabs.Movement:AddToggle("Speedhack", { Title = "Speedhack", Default = false, Callback = function(state)
+    walkSpeedActive = state
+    if walkSpeedConnection then walkSpeedConnection:Disconnect() end
+    if state then
+        walkSpeedConnection = RunService.Heartbeat:Connect(function()
+            if walkSpeedActive then
+                local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+                if hum then hum.WalkSpeed = walkSpeedValue end
+            end
+        end)
+    else
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if hum then hum.WalkSpeed = 16 end
+    end
+end })
+Tabs.Movement:AddInput("SpeedInput", { Title = "Value", Default = "16", Numeric = true, Finished = true, Callback = function(val)
+    walkSpeedValue = tonumber(val) or 16
+    if walkSpeedActive then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if hum then hum.WalkSpeed = walkSpeedValue end
+    end
+end })
+
+Tabs.Movement:AddToggle("JumpPower", { Title = "JumpPower", Default = false, Callback = function(state)
+    jumpPowerActive = state
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    if hum then
+        hum.JumpPower = state and jumpPowerValue or 50
+    end
+end })
+Tabs.Movement:AddInput("JumpInput", { Title = "Value", Default = "50", Numeric = true, Finished = true, Callback = function(val)
+    jumpPowerValue = tonumber(val) or 50
+    if jumpPowerActive then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if hum then hum.JumpPower = jumpPowerValue end
+    end
+end })
+
+Tabs.Movement:AddToggle("Fly", { Title = "Fly", Default = false, Callback = function(state)
+    flyActive = state
+    if state then startFly() else stopFly() end
+end })
+Tabs.Movement:AddInput("FlyInput", { Title = "Value", Default = "50", Numeric = true, Finished = true, Callback = function(val)
+    flySpeed = tonumber(val) or 50
+    flyMaxSpeed = flySpeed
+end })
+
+Tabs.Movement:AddToggle("Noclip", { Title = "Noclip", Default = false, Callback = function(state)
+    noclipActive = state
+    if noclipConnection then noclipConnection:Disconnect() end
+    if state then
+        noclipConnection = RunService.Stepped:Connect(function()
+            if noclipActive then
+                local char = LocalPlayer.Character
+                if char then
+                    for _, part in pairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr ~= LocalPlayer and plr.Character then
+                        for _, part in pairs(plr.Character:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                part.CanCollide = false
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    else
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                for _, part in pairs(plr.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+end })
+
+Tabs.Movement:AddToggle("Float", { Title = "Float", Default = false, Callback = function(state)
+    print("Float: " .. tostring(state))
+end })
+
+-- MISC TAB
+Tabs.Misc:AddToggle("FullBright", { Title = "FullBright", Default = false, Callback = function(state)
+    setFullBright(state)
+end })
+Tabs.Misc:AddToggle("InstantInteract", { Title = "Instant Interact", Default = false, Callback = function(state)
+    if state then enableInstantInteract() else disableInstantInteract() end
+end })
+
+Tabs.Misc:AddButton({ Title = "Case farm", Callback = function()
+    startCaseFarm()
+end })
+
+Tabs.Misc:AddButton({ Title = "AntiCheat Bypass", Callback = function()
+    enableBypass()
+end })
+
+Tabs.Misc:AddToggle("Relic & Black Aura", { Title = "Relic & Black Aura", Default = false, Callback = function(state)
+    relicAuraActive = state
+    if state then startRelicAura() elseif relicAuraThread then coroutine.close(relicAuraThread); relicAuraThread = nil end
+end })
+Tabs.Misc:AddToggle("Item Aura", { Title = "Item Aura", Default = false, Callback = function(state)
+    itemAuraActive = state
+    if state then startItemAura() elseif itemAuraThread then coroutine.close(itemAuraThread); itemAuraThread = nil end
+end })
+
+Window:SelectTab(1)
